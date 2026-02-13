@@ -1,0 +1,6 @@
+#!/bin/bash
+# play — open audio/video files in a browser-based player with speed control
+# Usage: play <file> [-s speed] [-p port]
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec bun run "$SCRIPT_DIR/server.ts" "$@"

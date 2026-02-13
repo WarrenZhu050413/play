@@ -1,0 +1,8 @@
+{
+  "name": "play",
+  "version": "1.0.0",
+  "description": "Browser-based audio player with speed control",
+  "scripts": {
+    "start": "bun run server.ts"
+  }
+}

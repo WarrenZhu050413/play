@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>play</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #111; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; user-select: none; }
+.player { background: #1a1a1a; border: 1px solid #2a2a2a; padding: 32px 40px; width: 560px; }
+.header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.logo { font-size: 13px; font-weight: 600; color: #c8a24e; letter-spacing: 0.5px; }
+.filename { font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 24px; }
+.time-row { display: flex; justify-content: space-between; font-size: 12px; color: #555; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.seek-wrap { position: relative; height: 20px; display: flex; align-items: center; margin-bottom: 20px; cursor: pointer; }
+.seek-track { width: 100%; height: 3px; background: #2a2a2a; position: relative; }
+.seek-fill { height: 100%; background: #c8a24e; width: 0%; transition: width 0.1s linear; }
+.seek-thumb { position: absolute; width: 10px; height: 10px; background: #c8a24e; top: 50%; transform: translate(-50%, -50%); left: 0%; opacity: 0; transition: opacity 0.15s; }
+.seek-wrap:hover .seek-thumb { opacity: 1; }
+.controls { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
+button { background: #222; color: #ccc; border: 1px solid #333; padding: 6px 14px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.1s; }
+button:hover { background: #2a2a2a; border-color: #444; }
+button:active { background: #333; }
+button.active { background: #c8a24e; color: #111; border-color: #c8a24e; font-weight: 600; }
+.play-btn { font-size: 18px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; padding: 0; }
+.seek-btns { display: flex; gap: 4px; }
+.seek-btns button { padding: 4px 8px; font-size: 11px; color: #888; }
+.speed-display { font-size: 28px; font-weight: 700; color: #c8a24e; margin-left: auto; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
+.speed-section { margin-bottom: 8px; }
+.speed-label { font-size: 11px; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+.speed-buttons { display: flex; gap: 4px; }
+.speed-buttons button { padding: 5px 0; font-size: 13px; flex: 1; text-align: center; }
+.speed-fine { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.speed-slider { -webkit-appearance: none; flex: 1; height: 3px; background: #2a2a2a; outline: none; cursor: pointer; }
+.speed-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; background: #c8a24e; }
+.kbd { font-size: 11px; color: #444; margin-top: 20px; line-height: 2; text-align: center; }
+kbd { background: #1e1e1e; border: 1px solid #333; padding: 1px 5px; font-size: 10px; font-family: inherit; }
+.drop-overlay { display: none; position: fixed; inset: 0; background: rgba(17,17,17,0.95); z-index: 100; justify-content: center; align-items: center; font-size: 18px; color: #c8a24e; border: 2px dashed #c8a24e; margin: 20px; }
+.drop-overlay.visible { display: flex; }
+</style>
+</head>
+<body>
+<div class="drop-overlay" id="dropOverlay">Drop audio file to play</div>
+<div class="player" id="player">
+  <div class="header"><span class="logo">play</span></div>
+  <div class="filename" id="fname">—</div>
+  <div class="time-row"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+  <div class="seek-wrap" id="seekWrap">
+    <div class="seek-track"><div class="seek-fill" id="seekFill"></div></div>
+    <div class="seek-thumb" id="seekThumb"></div>
+  </div>
+  <div class="controls">
+    <button class="play-btn" id="playBtn">&#9654;</button>
+    <div class="seek-btns">
+      <button onclick="seek(-30)">-30s</button>
+      <button onclick="seek(-10)">-10s</button>
+      <button onclick="seek(10)">+10s</button>
+      <button onclick="seek(30)">+30s</button>
+    </div>
+    <div class="speed-display" id="speedDisplay">1.0x</div>
+  </div>
+  <div class="speed-section">
+    <div class="speed-label">Speed</div>
+    <div class="speed-buttons" id="speedBtns">
+      <button data-speed="0.5">0.5</button>
+      <button data-speed="0.75">0.75</button>
+      <button data-speed="1" class="active">1.0</button>
+      <button data-speed="1.25">1.25</button>
+      <button data-speed="1.5">1.5</button>
+      <button data-speed="2">2.0</button>
+      <button data-speed="3">3.0</button>
+      <button data-speed="4">4.0</button>
+    </div>
+    <div class="speed-fine">
+      <input type="range" class="speed-slider" id="speedSlider" min="0.25" max="5" step="0.05" value="1">
+    </div>
+  </div>
+  <div class="kbd">
+    <kbd>Space</kbd> play/pause &nbsp; <kbd>←</kbd><kbd>→</kbd> ±10s &nbsp; <kbd>↑</kbd><kbd>↓</kbd> ±30s &nbsp; <kbd>[</kbd><kbd>]</kbd> speed ±0.25 &nbsp; <kbd>R</kbd> reset speed
+  </div>
+</div>
+<audio id="audio" preload="auto"></audio>
+<script>
+/*__CONFIG__*/
+
+const audio = document.getElementById('audio');
+const seekFill = document.getElementById('seekFill');
+const seekThumb = document.getElementById('seekThumb');
+const seekWrap = document.getElementById('seekWrap');
+const playBtn = document.getElementById('playBtn');
+const speedSlider = document.getElementById('speedSlider');
+const storageKey = 'play_position_';
+let currentSpeed = 1.0;
+let currentFile = '';
+
+function fmt(s) {
+  if (!s || !isFinite(s)) return '0:00';
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+function loadAudio(src, name) {
+  currentFile = name;
+  document.getElementById('fname').textContent = name;
+  document.title = `${name} — play`;
+  audio.src = src;
+
+  audio.addEventListener('loadedmetadata', () => {
+    // Restore position
+    const saved = localStorage.getItem(storageKey + name);
+    if (saved) {
+      const pos = parseFloat(saved);
+      if (pos > 0 && pos < audio.duration - 5) audio.currentTime = pos;
+    }
+    audio.play();
+    playBtn.innerHTML = '&#9646;&#9646;';
+  }, { once: true });
+}
+
+// CLI mode: auto-load from server
+if (window.__CONFIG__) {
+  const cfg = window.__CONFIG__;
+  setSpeed(cfg.speed);
+  loadAudio(cfg.audioUrl, cfg.fileName);
+}
+
+// Drag-and-drop: works in both CLI and standalone mode
+let dragCount = 0;
+document.addEventListener('dragenter', e => { e.preventDefault(); if (++dragCount === 1) document.getElementById('dropOverlay').classList.add('visible'); });
+document.addEventListener('dragleave', e => { e.preventDefault(); if (--dragCount === 0) document.getElementById('dropOverlay').classList.remove('visible'); });
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault(); dragCount = 0;
+  document.getElementById('dropOverlay').classList.remove('visible');
+  const f = e.dataTransfer.files[0];
+  if (f) loadAudio(URL.createObjectURL(f), f.name);
+});
+
+// Play/pause
+playBtn.addEventListener('click', toggle);
+function toggle() {
+  if (audio.paused) { audio.play(); playBtn.innerHTML = '&#9646;&#9646;'; }
+  else { audio.pause(); playBtn.innerHTML = '&#9654;'; }
+}
+
+// Time update
+audio.addEventListener('timeupdate', () => {
+  const pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+  seekFill.style.width = pct + '%';
+  seekThumb.style.left = pct + '%';
+  document.getElementById('curTime').textContent = fmt(audio.currentTime);
+  document.getElementById('durTime').textContent = fmt(audio.duration);
+  // Persist position every 5s
+  if (currentFile && Math.floor(audio.currentTime) % 5 === 0) {
+    localStorage.setItem(storageKey + currentFile, String(audio.currentTime));
+  }
+});
+
+// Seek bar click
+seekWrap.addEventListener('click', e => {
+  if (!audio.duration) return;
+  const rect = seekWrap.getBoundingClientRect();
+  audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
+});
+
+// Seek bar drag
+let seeking = false;
+seekWrap.addEventListener('mousedown', () => seeking = true);
+document.addEventListener('mousemove', e => {
+  if (!seeking || !audio.duration) return;
+  const rect = seekWrap.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  audio.currentTime = pct * audio.duration;
+});
+document.addEventListener('mouseup', () => seeking = false);
+
+function seek(delta) {
+  if (audio.duration) audio.currentTime = Math.max(0, Math.min(audio.duration, audio.currentTime + delta));
+}
+
+// Speed
+function setSpeed(s) {
+  s = Math.round(Math.max(0.25, Math.min(5, s)) * 100) / 100;
+  currentSpeed = s;
+  audio.playbackRate = s;
+  document.getElementById('speedDisplay').textContent = s + 'x';
+  speedSlider.value = s;
+  document.querySelectorAll('#speedBtns button').forEach(b => {
+    b.classList.toggle('active', parseFloat(b.dataset.speed) === s);
+  });
+  localStorage.setItem('play_speed', String(s));
+}
+
+// Restore last speed
+const savedSpeed = localStorage.getItem('play_speed');
+if (savedSpeed && !window.__CONFIG__) setSpeed(parseFloat(savedSpeed));
+
+document.querySelectorAll('#speedBtns button').forEach(b => {
+  b.addEventListener('click', () => setSpeed(parseFloat(b.dataset.speed)));
+});
+
+speedSlider.addEventListener('input', () => setSpeed(parseFloat(speedSlider.value)));
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  switch (e.code) {
+    case 'Space': e.preventDefault(); toggle(); break;
+    case 'ArrowLeft': e.preventDefault(); seek(-10); break;
+    case 'ArrowRight': e.preventDefault(); seek(10); break;
+    case 'ArrowUp': e.preventDefault(); seek(30); break;
+    case 'ArrowDown': e.preventDefault(); seek(-30); break;
+    case 'BracketRight': e.preventDefault(); setSpeed(currentSpeed + 0.25); break;
+    case 'BracketLeft': e.preventDefault(); setSpeed(currentSpeed - 0.25); break;
+    case 'KeyR': e.preventDefault(); setSpeed(1.0); break;
+  }
+});
+
+// End of track
+audio.addEventListener('ended', () => {
+  playBtn.innerHTML = '&#9654;';
+  if (currentFile) localStorage.removeItem(storageKey + currentFile);
+});
+</script>
+</body>
+</html>
