@@ -47,6 +47,7 @@ const injectedHtml = playerHtml.replace(
 
 const server = Bun.serve({
   port,
+  idleTimeout: 255, // max for large file streaming
   async fetch(req) {
     const url = new URL(req.url);
 

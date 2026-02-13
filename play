@@ -1,7 +1,14 @@
 #!/bin/bash
-# play — open audio/video files in a browser-based player with speed control
-# Usage: play <file> [-s speed] [-p port]
+# play — browser-based audio player with speed control
+# Usage:
+#   play <file> [-s speed]         Play a file
+#   play -d [directory]            Browse directory and pick a file
+#   play -d Downloads              Short alias for ~/Downloads
+#   play -d .                      Current directory
 
+set -e
+
+# Resolve symlinks to find script dir
 SOURCE="$0"
 while [ -L "$SOURCE" ]; do
   DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
@@ -9,4 +16,117 @@ while [ -L "$SOURCE" ]; do
   [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
-exec bun run "$SCRIPT_DIR/server.ts" "$@"
+
+# Audio/video extensions to match
+EXTS="mp3|m4a|wav|ogg|flac|aac|opus|webm|wma|mp4|mkv|mov"
+
+# Parse args
+DIR_MODE=""
+SPEED_ARGS=()
+FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -d|--dir)
+      shift
+      DIR_MODE="${1:-.}"
+      shift
+      ;;
+    -s|--speed)
+      SPEED_ARGS+=("-s" "$2")
+      shift 2
+      ;;
+    -p|--port)
+      SPEED_ARGS+=("-p" "$2")
+      shift 2
+      ;;
+    -h|--help)
+      echo "play — browser-based audio player with speed control"
+      echo ""
+      echo "Usage:"
+      echo "  play <file> [-s speed] [-p port]   Play a file"
+      echo "  play -d [dir] [-s speed]           Browse and pick"
+      echo ""
+      echo "Shortcuts:"
+      echo "  play -d              Current directory"
+      echo "  play -d Downloads    ~/Downloads"
+      echo "  play -d Desktop      ~/Desktop"
+      echo "  play -d Music        ~/Music"
+      echo ""
+      echo "Player keys:"
+      echo "  Space  play/pause    ←→  ±10s    ↑↓  ±30s"
+      echo "  [ ]    speed ±0.25   R   reset speed"
+      exit 0
+      ;;
+    *)
+      FILE="$1"
+      shift
+      ;;
+  esac
+done
+
+# Directory browse mode
+if [[ -n "$DIR_MODE" ]]; then
+  # Resolve shorthand directory names
+  case "$DIR_MODE" in
+    Downloads|downloads) DIR_MODE="$HOME/Downloads" ;;
+    Desktop|desktop)     DIR_MODE="$HOME/Desktop" ;;
+    Music|music)         DIR_MODE="$HOME/Music" ;;
+    Documents|documents) DIR_MODE="$HOME/Documents" ;;
+  esac
+
+  # Resolve to absolute path
+  DIR_MODE="$(cd "$DIR_MODE" 2>/dev/null && pwd)" || {
+    echo "Directory not found: $DIR_MODE" >&2
+    exit 1
+  }
+
+  # Check fzf
+  if ! command -v fzf &>/dev/null; then
+    echo "fzf required for directory mode. Install: brew install fzf" >&2
+    exit 1
+  fi
+
+  # Find audio files, sorted newest first, format as "date  filename"
+  SELECTED=$(
+    find "$DIR_MODE" -maxdepth 3 -type f \( \
+      -iname '*.mp3' -o -iname '*.m4a' -o -iname '*.wav' -o -iname '*.ogg' \
+      -o -iname '*.flac' -o -iname '*.aac' -o -iname '*.opus' -o -iname '*.webm' \
+      -o -iname '*.wma' -o -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' \
+    \) 2>/dev/null |
+    while IFS= read -r f; do
+      # Get mtime as epoch for sorting, human-readable date for display
+      epoch=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null)
+      date=$(stat -f '%Sm' -t '%m/%d %H:%M' "$f" 2>/dev/null || date -r "$epoch" '+%m/%d %H:%M' 2>/dev/null)
+      name=$(basename "$f")
+      printf '%s\t%s\t%s\t%s\n' "$epoch" "$date" "$name" "$f"
+    done |
+    sort -t$'\t' -k1 -rn |
+    cut -d$'\t' -f2- |
+    fzf --ansi \
+        --delimiter=$'\t' \
+        --with-nth=1,2 \
+        --header="Select audio file (newest first) — type to search" \
+        --preview='echo "File: {2}\nPath: {3}"' \
+        --preview-window=down:3:wrap \
+        --height=80% \
+        --reverse \
+        --no-mouse \
+        --bind='ctrl-/:toggle-preview' |
+    cut -d$'\t' -f3
+  ) || exit 0
+
+  if [[ -z "$SELECTED" ]]; then
+    exit 0
+  fi
+
+  FILE="$SELECTED"
+fi
+
+if [[ -z "$FILE" ]]; then
+  echo "Usage: play <file> [-s speed] or play -d [directory]" >&2
+  echo "       play --help for more info" >&2
+  exit 1
+fi
+
+exec bun run "$SCRIPT_DIR/server.ts" "$FILE" "${SPEED_ARGS[@]}"
