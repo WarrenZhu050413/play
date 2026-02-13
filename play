@@ -40,6 +40,10 @@ while [[ $# -gt 0 ]]; do
       SPEED_ARGS+=("-p" "$2")
       shift 2
       ;;
+    --no-open)
+      SPEED_ARGS+=("--no-open")
+      shift
+      ;;
     -h|--help)
       echo "play — browser-based audio player with speed control"
       echo ""

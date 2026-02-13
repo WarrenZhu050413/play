@@ -12,12 +12,15 @@ const args = process.argv.slice(2);
 let filePath = "";
 let speed = 1.0;
 let port = 9876;
+let noOpen = false;
 
 for (let i = 0; i < args.length; i++) {
   if ((args[i] === "-s" || args[i] === "--speed") && args[i + 1]) {
     speed = parseFloat(args[++i]);
   } else if ((args[i] === "-p" || args[i] === "--port") && args[i + 1]) {
     port = parseInt(args[++i]);
+  } else if (args[i] === "--no-open") {
+    noOpen = true;
   } else if (!args[i].startsWith("-")) {
     filePath = resolve(args[i]);
   }
@@ -91,7 +94,7 @@ console.log(`  http://localhost:${server.port}`);
 console.log(`  \x1b[2mCtrl+C to stop\x1b[0m`);
 
 // Open browser
-Bun.spawn(["open", `http://localhost:${server.port}`]);
+if (!noOpen) Bun.spawn(["open", `http://localhost:${server.port}`]);
 
 // Graceful shutdown
 process.on("SIGINT", () => {
